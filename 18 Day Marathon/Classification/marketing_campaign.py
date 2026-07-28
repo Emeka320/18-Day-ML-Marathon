@@ -20,17 +20,21 @@ backup_data = data.copy()
 
 #-------------------------------------------------------------------------
 # Inspection
-"""
+
 print(data.columns)
 print(data.dtypes)
 print(data.isna().isnull().sum())
-"""
+
 
 columns = ['ID']
 
 data = data.drop(columns=columns)
 data.insert(0, 'ID', range(1, len(data) + 1))
 print(data)
+
+print(f"Data Info: \n{data.info()}")
+
+print(f"\nData Description: \n{data.describe()}")
 
 #-------------------------------------------------------------------------
 # Feature Engineering
@@ -106,7 +110,7 @@ print(f"Fully Cleaned Data: \n{cleaned_data}")
 
 columns = list(cleaned_data.columns)
 print(columns)
-"""
+
 corr = cleaned_data.corr()
 print(corr)
 
@@ -117,7 +121,7 @@ for one, two in combinations(columns, 2):
 
     print(f"{one} vs {two} -> Correlation: {correlation}")
 
-"""
+
 #-------------------------------------------------------------------------------------
 # Model 1: Channel Preference
 # This model focuses on which customers prefer web vs store? Then a secondary question of which channel drives more sales?
@@ -126,6 +130,8 @@ print("\n" + "="*60)
 print("MODEL 1: CHANNEL PREFERENCE...")
 print("="*60)
 
+#-------------------------------------------------------------------------------------
+# Creating dataset copy
 df = cleaned_data.copy()
 
 # Create age from Year_Birth
@@ -145,15 +151,15 @@ df.loc[df['NumWebPurchases'] > df['NumStorePurchases'], 'ChannelPref'] = 0  # We
 df.loc[df['NumStorePurchases'] > df['NumWebPurchases'], 'ChannelPref'] = 1  # Store
 # Ties with zero purchases remain 2, but exclude from analysis if needed
 
-# Create separate flags for analysis (optional)
+# Create separate flags for analysis
 df['PrefersWeb'] = (df['ChannelPref'] == 0).astype(int)
 df['PrefersStore'] = (df['ChannelPref'] == 1).astype(int)
 
 # Create feature set
 preference_data = df[[
     'Age', 'Income', 'Education', 'Marital_Status',
-    'Kidhome', 'Teenhome', 'Recency', 'Complain',
-    'NumDealsPurchases', 'NumWebVisitsMonth', 'ChannelPref', 'MntTotal', 'NumCatalogPurchases'
+    'Kidhome', 'Teenhome', 'Recency', 'NumDealsPurchases', 
+    'NumWebVisitsMonth', 'ChannelPref', 'MntTotal', 'NumCatalogPurchases'
 ]].copy()
 
 
@@ -177,7 +183,8 @@ print(f"\nAvg spend - Web preferrers: ${web_avg:.2f}")
 print(f"Avg spend - Store preferrers: ${store_avg:.2f}")
 print(f"Avg spend - Balanced shoppers: ${balanced_avg:.2f}")
 
-
+#-------------------------------------------------------------------------------------
+# Features correlation
 columns = list(preference_data.columns)
 corr = preference_data.corr()
 print(corr)
@@ -190,14 +197,28 @@ for one, two in combinations(columns, 2):
     print(f"{one} vs {two} -> Correlation: {correlation}")
 
 
+plt.figure(figsize=(14, 12))
 
-#---
+# Create heatmap
+sns.heatmap(corr, 
+            annot=True,           # Show correlation values
+            fmt='.2f',            # 2 decimal places
+            cmap='RdBu_r',        # Red-Blue color scheme (red=positive, blue=negative)
+            center=0,             # Center colormap at 0
+            square=True,          # Square cells
+            linewidths=0.5,       # Grid lines
+            cbar_kws={'shrink': 0.8, 'label': 'Correlation Coefficient'},
+            vmin=-1, vmax=1)
 
+plt.title('Feature Correlation Heatmap', fontsize=16, fontweight='bold')
+plt.tight_layout()
+plt.savefig('channel_preference_data_correlation_heatmap.png', dpi=150, bbox_inches='tight')
+plt.show()
+#-------------------------------------------------------------------------------------
+# Features Selection and Scaling
 
-X = preference_data[['Age', 'Income', 'Education', 'Marital_Status',
-    'Kidhome', 'Teenhome', 'Recency', 'Complain',
-    'NumDealsPurchases', 'NumCatalogPurchases', 
-    'NumWebVisitsMonth', 'MntTotal']]
+X = preference_data[['Age', 'Income', 'Education', 'Marital_Status','Kidhome', 
+    'Teenhome', 'Recency','NumDealsPurchases', 'NumCatalogPurchases', 'NumWebVisitsMonth', 'MntTotal']]
 
 y = preference_data['ChannelPref']
 
@@ -208,6 +229,9 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
+
+
+#-------------------------------------------------------------------------------------
 
 print("\n" + "="*60)
 print("GRADIENT BOOSTING - TUNING MAX_DEPTH")
@@ -233,11 +257,9 @@ best_cv_depth = depth_values[np.argmax(rf_depth_cv_scores)]
 print(f"\nBest max_depth by Test Accuracy: {best_depth} (Score: {max(rf_depth_scores):.4f})")
 print(f"Best max_depth by Cross-Validation: {best_cv_depth} (Score: {max(rf_depth_cv_scores):.4f})")
 
-
-
 #-------------------------------------------------------------------------------------
 # Model 2: High-Value Wine Buyer
-# This model focuses on which customers are hih-value wine buyers
+# This model focuses on which customers are high-value wine buyers
 
 print("\n" + "="*60)
 print("MODEL 2: HIGH VALUE WINE BUYER...")
@@ -250,8 +272,7 @@ df['HighWineBuyer'] = (df['MntWines'] > threshold).astype(int)
 
 wine_buy_data = df[[
     'Age', 'Income', 'Education', 'Marital_Status',
-    'Kidhome', 'Teenhome', 'Recency', 'Complain',
-    'NumDealsPurchases', 'NumCatalogPurchases', 
+    'Kidhome', 'Teenhome', 'NumDealsPurchases', 'NumCatalogPurchases', 
     'NumWebVisitsMonth', 'HighWineBuyer'
 ]].copy()
 
@@ -261,10 +282,12 @@ print(f"\nWine Buyer Distribution:")
 print(f"Low Buyer (0): {(df['HighWineBuyer'] == 0).sum()}")
 print(f"High Buyer (1): {(df['HighWineBuyer'] == 1).sum()}")
 
+#-------------------------------------------------------------------------------------
+# Features correlation
 
 columns = list(wine_buy_data.columns)
-corr = preference_data.corr()
-print(corr)
+wine_corr = wine_buy_data.corr()
+print(wine_corr)
 
 print("\n")
 
@@ -273,13 +296,31 @@ for one, two in combinations(columns, 2):
 
     print(f"{one} vs {two} -> Correlation: {correlation}")
 
+plt.figure(figsize=(14, 12))
 
-# ---
+# Create heatmap
+sns.heatmap(wine_corr, 
+            annot=True,           # Show correlation values
+            fmt='.2f',            # 2 decimal places
+            cmap='RdBu_r',        # Red-Blue color scheme (red=positive, blue=negative)
+            center=0,             # Center colormap at 0
+            square=True,          # Square cells
+            linewidths=0.5,       # Grid lines
+            cbar_kws={'shrink': 0.8, 'label': 'Correlation Coefficient'},
+            vmin=-1, vmax=1)
+
+
+plt.title('Feature Correlation Heatmap', fontsize=16, fontweight='bold')
+plt.tight_layout()
+plt.savefig('high-value_wine_buyer_data_correlation_heatmap.png', dpi=150, bbox_inches='tight')
+plt.show()
+
+#-------------------------------------------------------------------------------------
+# Features Selection and Scaling
 
 
 X = wine_buy_data[['Age', 'Income', 'Education', 'Marital_Status',
-    'Kidhome', 'Teenhome', 'Recency', 'Complain',
-    'NumDealsPurchases', 'NumCatalogPurchases', 
+    'Kidhome', 'Teenhome', 'NumDealsPurchases', 'NumCatalogPurchases', 
     'NumWebVisitsMonth']]
 
 y = wine_buy_data['HighWineBuyer']
@@ -291,6 +332,10 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
+
+
+#-------------------------------------------------------------------------------------
+# Model Training
 
 print("\n" + "="*60)
 print("GRADIENT BOOSTING - TUNING MAX_DEPTH")
@@ -315,7 +360,6 @@ best_depth = depth_values[np.argmax(rf_depth_scores)]
 best_cv_depth = depth_values[np.argmax(rf_depth_cv_scores)]
 print(f"\nBest max_depth by Test Accuracy: {best_depth} (Score: {max(rf_depth_scores):.4f})")
 print(f"Best max_depth by Cross-Validation: {best_cv_depth} (Score: {max(rf_depth_cv_scores):.4f})")
-
 
 
 
@@ -343,3 +387,9 @@ for prefix in prefixes:
 
 print(camp_data)
 '''
+
+
+
+
+
+
